@@ -6,7 +6,7 @@ class Terabox:
     
     httpx_client: Client
 
-    def __init__(self,session: SessionCookies,callback: Callable[...,None]) -> None:
+    def __init__(self,session: SessionCookies,callback: Callable[...,None] = None) -> None:
         if not isinstance(session,SessionCookies):
             raise Exception()
         self._session = session._prepare_to_session()
