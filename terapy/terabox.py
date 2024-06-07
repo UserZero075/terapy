@@ -10,7 +10,8 @@ from httpx import (
 from .utils import (
     is_valid_url, 
     extract_info,
-    extract_url_query
+    extract_url_query,
+    update_many_query
 )
 from .const import (
     TOKEN_PATTERN,
@@ -30,6 +31,7 @@ class TeraboxData:
         self._dlink = dlink
         self._icon_url = icon_url
 
+
     @property
     def filename(self):
         return self._filename
@@ -43,7 +45,7 @@ class TeraboxData:
     @property
     def icon_url(self):
         return self._icon_url
-    
+
 
 class Terabox:
     
@@ -131,10 +133,10 @@ class Terabox:
         if not head_rq.has_redirect_location:
             Exception("Error in get direct link")
         return TeraboxData(
-           filename=response_json["list"][0]['server_filename'],
-           size=response_json["list"][0]['size'],
-           dlink=head_rq.headers.get("location"),
-           icon_url=response_json["list"][0]['thumbs']['url3']
+            filename=response_json["list"][0]['server_filename'],
+            size=response_json["list"][0]['size'],
+            dlink=response_json["list"][0]['dlink'],
+            icon_url=response_json["list"][0]['thumbs']['url3'],
         )
     def generate_link(self,url: str) -> str:
         if not url and not isinstance(url,str):
@@ -143,18 +145,45 @@ class Terabox:
         if not r.dlink: 
             raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
         return r.dlink
+    
+    def get_thumbs(self,url: str):
+        if not url and not isinstance(url,str):
+            raise Exception()
+        r = self._get_data(url)
+        if not r.icon_url: 
+            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+        return r.icon_url
+    
+    def get_size(self,url: str):
+        if not url and not isinstance(url,str):
+            raise Exception()
+        r = self._get_data(url)
+        if not r.size: 
+            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+        return r.size
+    
+    def get_name(self,url: str):
+        if not url and not isinstance(url,str):
+            raise Exception()
+        r = self._get_data(url)
+        if not r.filename: 
+            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+        return r.filename
 
 
 class TeraboxAsync:
-    
     httpx_client: AsyncClient
-    
-    def __init__(self,session: SessionCookies,callback: Callable[...,None] = None) -> None:
+    client_timeout = 60
+    def __init__(
+            self,session: SessionCookies,
+            callback: Callable[...,None] = None,
+            client_timeout = None) -> None:
         if not isinstance(session,SessionCookies):
             raise Exception()
         self._session = session._prepare_to_session()
         self._callback = callback
 
+        self._client_timeout = client_timeout or self.client_timeout
         self._init_client()
     
     def _prepare_headers(self):
@@ -183,7 +212,8 @@ class TeraboxAsync:
         self.httpx_client = AsyncClient(
             cookies=self.session,
             headers=header,
-            follow_redirects=True
+            follow_redirects=True,
+            timeout=self.client_timeout
         )
 
     @property
@@ -217,7 +247,6 @@ class TeraboxAsync:
                 log_id = dp_login,
                 short_url = short_url
         ))
-    
 
         if not rq.is_success:
             raise Exception()
@@ -230,10 +259,10 @@ class TeraboxAsync:
         if not head_rq.has_redirect_location:
             Exception("Error in get direct link")
         return TeraboxData(
-           filename=response_json["list"][0]['server_filename'],
-           size=response_json["list"][0]['size'],
-           dlink=head_rq.headers.get("location"),
-           icon_url=response_json["list"][0]['thumbs']['url3']
+            filename=response_json["list"][0]['server_filename'],
+            size=response_json["list"][0]['size'],
+            dlink=response_json["list"][0]['dlink'],
+            icon_url=response_json["list"][0]['thumbs']['url3'],
         )
     async def generate_link(self,url: str) -> str:
         if not url and not isinstance(url,str):
@@ -242,3 +271,43 @@ class TeraboxAsync:
         if not r.dlink: 
             raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
         return r.dlink
+    
+    # async def download(self,url: str):
+    #     if not url and not isinstance(url,str):
+    #         raise Exception()
+        
+    #     r = await self._get_data(url)
+    #     if not r.dlink:
+    #         raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+    #     io = open(r.filename,"wb")
+    #     d = await self.httpx_client.get(r.dlink)
+    #     for _c in d.iter_bytes():
+    #         io.write(_c)
+
+    #         if self.callback:
+    #             pass
+    #     io.close()
+
+    async def get_thumbs(self,url: str):
+        if not url and not isinstance(url,str):
+            raise Exception()
+        r = await self._get_data(url)
+        if not r.icon_url: 
+            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+        return r.icon_url
+    
+    async def get_size(self,url: str):
+        if not url and not isinstance(url,str):
+            raise Exception()
+        r = await self._get_data(url)
+        if not r.size: 
+            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+        return r.size
+    
+    async def get_name(self,url: str):
+        if not url and not isinstance(url,str):
+            raise Exception()
+        r = await self._get_data(url)
+        if not r.filename: 
+            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+        return r.filename
