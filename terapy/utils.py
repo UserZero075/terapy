@@ -6,6 +6,8 @@ from .types import URLTypes
 import re
 import yarl
 import urllib.parse
+import uuid
+import datetime
 
 
 
@@ -54,4 +56,10 @@ def update_many_query(url: URLTypes,mapping: MutableMapping[str,str]) -> str:
         _url = _url.update_query({k:v})
     return _url.__str__()
 
+
+def create_name_hashed():
+    return uuid.uuid4().hex + datetime.datetime.now().timestamp().__str__()
+
+def fix_filename(filename: str):
+    return urllib.parse.quote(filename,errors="replace")
 

@@ -4,24 +4,29 @@ from typing import (
 )
 from httpx import (
     Client,
-    AsyncClient
+    AsyncClient,
+    Response,
+    Timeout
 )
 
 from .utils import (
     is_valid_url, 
     extract_info,
     extract_url_query,
-    update_many_query
+    create_name_hashed,
+    fix_filename
 )
 from .const import (
     TOKEN_PATTERN,
     DP_PATTERN,
-    BASE_URL
+    BASE_URL,
+    PARENT_DIR
 )
 from .ext import SessionCookies
+from .types import Function, Buffer
+from .errors import *
 
-
-
+import inspect,functools,os
 
 class TeraboxData:
 
@@ -98,8 +103,8 @@ class Terabox:
         return self._callback
     
     @callback.setter
-    def callback(self,value: Callable[...,None]):
-        if not isinstance(value,callable):
+    def callback(self,value: Function):
+        if not isinstance(value,function):
             raise Exception("callback debe ser una funcion")
         self._callback = value
 
@@ -174,16 +179,17 @@ class Terabox:
 class TeraboxAsync:
     httpx_client: AsyncClient
     client_timeout = 60
+    download_timeout = Timeout(timeout=10,read=None)
     def __init__(
             self,session: SessionCookies,
-            callback: Callable[...,None] = None,
-            client_timeout = None) -> None:
+            callback: Function = None
+        ) -> None:
         if not isinstance(session,SessionCookies):
             raise Exception()
         self._session = session._prepare_to_session()
         self._callback = callback
 
-        self._client_timeout = client_timeout or self.client_timeout
+        
         self._init_client()
     
     def _prepare_headers(self):
@@ -225,8 +231,8 @@ class TeraboxAsync:
         return self._callback
     
     @callback.setter
-    def callback(self,value: Callable[...,None]):
-        if not isinstance(value,callable):
+    def callback(self,value: Function):
+        if not inspect.isfunction(value):
             raise Exception("callback debe ser una funcion")
         self._callback = value
 
@@ -266,48 +272,98 @@ class TeraboxAsync:
         )
     async def generate_link(self,url: str) -> str:
         if not url and not isinstance(url,str):
-            raise Exception()
+            raise LinkInvalid()
         r = await self._get_data(url)
         if not r.dlink: 
-            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
-        return r.dlink
+            raise CookiesError()
     
-    # async def download(self,url: str):
-    #     if not url and not isinstance(url,str):
-    #         raise Exception()
-        
-    #     r = await self._get_data(url)
-    #     if not r.dlink:
-    #         raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
-    #     io = open(r.filename,"wb")
-    #     d = await self.httpx_client.get(r.dlink)
-    #     for _c in d.iter_bytes():
-    #         io.write(_c)
-
-    #         if self.callback:
-    #             pass
-    #     io.close()
 
     async def get_thumbs(self,url: str):
         if not url and not isinstance(url,str):
-            raise Exception()
+            raise TypeError("\"(url) is type str not \"" + type(url))
         r = await self._get_data(url)
         if not r.icon_url: 
-            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+            raise CookiesError()
         return r.icon_url
     
     async def get_size(self,url: str):
         if not url and not isinstance(url,str):
-            raise Exception()
+            raise TypeError("\"(url) is type str not \"" + type(url))
         r = await self._get_data(url)
         if not r.size: 
-            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+            raise CookiesError()
         return r.size
     
     async def get_name(self,url: str):
         if not url and not isinstance(url,str):
-            raise Exception()
+            raise TypeError("\"(url) is type str not \"" + type(url))
         r = await self._get_data(url)
         if not r.filename: 
-            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+            raise CookiesError()
         return r.filename
+    
+    async def download(
+            self, 
+            url: str,
+            directory: str = PARENT_DIR,
+            file_name: str = None
+            ) -> str:
+        if not url and not isinstance(url,str):
+            raise TypeError("\"(url) is type str not \"" + type(url))
+        r = await self._get_data(url)
+        if not r.dlink:
+            raise CookiesError()
+        
+        if directory != PARENT_DIR:
+            os.path.exists(directory)
+        if not file_name and not r.filename:
+            file_name = create_name_hashed()
+        elif not file_name and r.filename:
+            file_name = r.filename
+        
+        file_name = fix_filename(file_name)
+        path = os.path.join(directory,file_name)
+        async with AsyncClient() as download_instance:
+            with open(path,"wb") as f:
+                resp_redirect = await download_instance.get(r.dlink,timeout=self.download_timeout,follow_redirects=False)
+                if not resp_redirect.has_redirect_location:
+                    raise Exception()
+                dl_url = resp_redirect.headers['location']
+                download_instance.cookies = resp_redirect.cookies
+                async with download_instance.stream("GET",dl_url,timeout=self.download_timeout) as resp:
+                    async for b in self._get_download(
+                        respose=resp,
+                        callback=self.callback,
+                        callback_args=(),
+                        total_size=r.size
+                    ):
+                        f.write(b)
+            return path
+
+
+    async def _get_download(self,respose: Response, **kwargs):
+        callback_function = kwargs.get("callback")
+        callback_args = kwargs.get("callback_args")
+        total_size = kwargs.get("total_size")
+        current = 0
+
+        async for chunk in respose.stream:
+            yield chunk
+            current += len(chunk)
+            if callback_function:
+                if not inspect.iscoroutinefunction(callback_function):
+                    ...
+                else:
+                    f = functools.partial(
+                        callback_function,
+                        *(current,total_size),
+                        *callback_args
+                    )
+                    await f()
+            continue
+            
+
+
+        
+        
+    
