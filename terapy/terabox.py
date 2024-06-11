@@ -54,14 +54,19 @@ class TeraboxData:
 
 class Terabox:
     
-    httpx_client: Client
-
-    def __init__(self,session: SessionCookies,callback: Callable[...,None] = None) -> None:
+    httpx_client: AsyncClient
+    client_timeout = 60
+    download_timeout = Timeout(timeout=10,read=None)
+    def __init__(
+            self,session: SessionCookies,
+            callback: Function = None
+        ) -> None:
         if not isinstance(session,SessionCookies):
             raise Exception()
         self._session = session._prepare_to_session()
         self._callback = callback
 
+        
         self._init_client()
     
     def _prepare_headers(self):
@@ -86,13 +91,13 @@ class Terabox:
 
     def _init_client(self):
         header = self._prepare_headers()
-        self.httpx_client = Client(
+
+        self.httpx_client = AsyncClient(
             cookies=self.session,
             headers=header,
-            follow_redirects=True
+            follow_redirects=True,
+            timeout=self.client_timeout
         )
-        return
-    
 
     @property
     def session(self):
@@ -104,7 +109,7 @@ class Terabox:
     
     @callback.setter
     def callback(self,value: Function):
-        if not isinstance(value,function):
+        if not inspect.isfunction(value):
             raise Exception("callback debe ser una funcion")
         self._callback = value
 
@@ -125,14 +130,13 @@ class Terabox:
                 log_id = dp_login,
                 short_url = short_url
         ))
-    
 
         if not rq.is_success:
             raise Exception()
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
             raise Exception()
-        head_rq = self.httpx_client.get(
+        head_rq = await self.httpx_client.get(
             response_json["list"][0]["dlink"],follow_redirects=False
         )
         if not head_rq.has_redirect_location:
@@ -145,35 +149,95 @@ class Terabox:
         )
     def generate_link(self,url: str) -> str:
         if not url and not isinstance(url,str):
-            raise Exception()
+            raise LinkInvalid()
         r = self._get_data(url)
         if not r.dlink: 
-            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
-        return r.dlink
+            raise CookiesError()
     
+
     def get_thumbs(self,url: str):
         if not url and not isinstance(url,str):
-            raise Exception()
+            raise TypeError("\"(url) is type str not \"" + type(url))
         r = self._get_data(url)
         if not r.icon_url: 
-            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+            raise CookiesError()
         return r.icon_url
     
     def get_size(self,url: str):
         if not url and not isinstance(url,str):
-            raise Exception()
+            raise TypeError("\"(url) is type str not \"" + type(url))
         r = self._get_data(url)
         if not r.size: 
-            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+            raise CookiesError()
         return r.size
     
     def get_name(self,url: str):
         if not url and not isinstance(url,str):
-            raise Exception()
+            raise TypeError("\"(url) is type str not \"" + type(url))
         r = self._get_data(url)
         if not r.filename: 
-            raise Exception("Probablemente sus cookies son invalidas, debe haber iniciado sesion en la web primero") 
+            raise CookiesError()
         return r.filename
+    
+    def download(
+            self, 
+            url: str,
+            directory: str = PARENT_DIR,
+            file_name: str = None
+            ) -> str:
+        if not url and not isinstance(url,str):
+            raise TypeError("\"(url) is type str not \"" + type(url))
+        r = self._get_data(url)
+        if not r.dlink:
+            raise CookiesError()
+        
+        if directory != PARENT_DIR:
+            os.path.exists(directory)
+        if not file_name and not r.filename:
+            file_name = create_name_hashed()
+        elif not file_name and r.filename:
+            file_name = r.filename
+        
+        file_name = fix_filename(file_name)
+        path = os.path.join(directory,file_name)
+        with Client() as download_instance:
+            with open(path,"wb") as f:
+                resp_redirect = download_instance.get(r.dlink,timeout=self.download_timeout,follow_redirects=False)
+                if not resp_redirect.has_redirect_location:
+                    raise Exception()
+                dl_url = resp_redirect.headers['location']
+                download_instance.cookies = resp_redirect.cookies
+                with download_instance.stream("GET",dl_url,timeout=self.download_timeout) as resp:
+                    for b in self._get_download(
+                        respose=resp,
+                        callback=self.callback,
+                        callback_args=(),
+                        total_size=r.size
+                    ):
+                        f.write(b)
+            return path
+
+
+    def _get_download(self,respose: Response, **kwargs):
+        callback_function = kwargs.get("callback")
+        callback_args = kwargs.get("callback_args")
+        total_size = kwargs.get("total_size")
+        current = 0
+
+        for chunk in respose.stream:
+            yield chunk
+            current += len(chunk)
+            if callback_function:
+                if not inspect.iscoroutinefunction(callback_function):
+                    ...
+                else:
+                    f = functools.partial(
+                        callback_function,
+                        *(current,total_size),
+                        *callback_args
+                    )
+                    f()
+            continue
 
 
 class TeraboxAsync:
