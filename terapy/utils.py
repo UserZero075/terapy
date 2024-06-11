@@ -18,7 +18,7 @@ def generate_params(query: MutableMapping[str,str]):
             try:
                 v.__str__()
             except Exception as ex:
-                raise Exception("Valores de los querys deben aceptar conversion a string")
+                raise TypeError("Error to convert value to string")
         _param = _param.update_query({k:v})
     return _param.query_string
 
@@ -32,8 +32,7 @@ def extract_url_query(key: str,url: URLTypes):
         return query.get(key,None)
     elif isinstance(query,(str,bytes)):
         return urllib.parse.parse_qs(query.decode()).get(key,None)[0]
-    else: 
-        Exception
+    return None
     
 
 def extract_info(text: str, pattern: str): 
@@ -52,7 +51,7 @@ def update_many_query(url: URLTypes,mapping: MutableMapping[str,str]) -> str:
     else: _url = url
     for k,v in mapping.items():
         if not k in _url.query.keys():
-            raise Exception()
+            raise KeyError(f"error to get {k}")
         _url = _url.update_query({k:v})
     return _url.__str__()
 

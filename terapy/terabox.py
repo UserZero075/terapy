@@ -23,7 +23,7 @@ from .const import (
     PARENT_DIR
 )
 from .ext import SessionCookies
-from .types import Function, Buffer
+from .types import Function, Args
 from .errors import *
 
 import inspect,functools,os
@@ -246,12 +246,14 @@ class TeraboxAsync:
     download_timeout = Timeout(timeout=10,read=None)
     def __init__(
             self,session: SessionCookies,
-            callback: Function = None
+            callback: Function = None,
+            callback_args: Args = None
         ) -> None:
         if not isinstance(session,SessionCookies):
             raise Exception()
         self._session = session._prepare_to_session()
         self._callback = callback
+        self._callback_args = callback_args
 
         
         self._init_client()
@@ -300,11 +302,25 @@ class TeraboxAsync:
             raise Exception("callback debe ser una funcion")
         self._callback = value
 
+    @property
+    def callback_args(self):
+        return self._callback_args
+    
+    @callback_args.setter
+    def callback_args(self,value: Args):
+        if not isinstance(value,(tuple,list)):
+            value = (value)
+        self._callback_args = value 
+
     async def _get_data(self,url: str): 
         if not is_valid_url(url):
             raise Exception("Url is Invalid")
-        init_req_redict = await self.httpx_client.get(url,params="")
-        init_req = await self.httpx_client.get(init_req_redict.url,params="")
+        init_req_redict = await self.httpx_client.get(url)
+        if not (200 <= init_req_redict.status_code <= 399):
+            raise StatusResponseError(init_req_redict.status_code)
+        init_req = await self.httpx_client.get(init_req_redict.url)
+        if not init_req.is_success:
+            raise StatusResponseError(init_req_redict.status_code)
         token = extract_info(init_req.text,TOKEN_PATTERN)
         dp_login = extract_info(init_req.text,DP_PATTERN)
         short_url = extract_url_query(
@@ -319,7 +335,7 @@ class TeraboxAsync:
         ))
 
         if not rq.is_success:
-            raise Exception()
+            raise StatusResponseError(init_req_redict.status_code)
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
             raise Exception()
@@ -391,14 +407,14 @@ class TeraboxAsync:
             with open(path,"wb") as f:
                 resp_redirect = await download_instance.get(r.dlink,timeout=self.download_timeout,follow_redirects=False)
                 if not resp_redirect.has_redirect_location:
-                    raise Exception()
+                    raise DontRedirect()
                 dl_url = resp_redirect.headers['location']
                 download_instance.cookies = resp_redirect.cookies
                 async with download_instance.stream("GET",dl_url,timeout=self.download_timeout) as resp:
                     async for b in self._get_download(
                         respose=resp,
-                        callback=self.callback,
-                        callback_args=(),
+                        callback=self._callback,
+                        callback_args=self._callback_args,
                         total_size=r.size
                     ):
                         f.write(b)

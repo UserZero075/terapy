@@ -5,6 +5,6 @@ from io import BufferedWriter
 
 URLTypes = Union[str,URL]
 Function = Callable[...,Any]
-
+Args = tuple[Any]
 
 Buffer: TypeAlias = BufferedWriter 
