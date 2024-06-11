@@ -54,18 +54,19 @@ class TeraboxData:
 
 class Terabox:
     
-    httpx_client: AsyncClient
+    httpx_client: Client
     client_timeout = 60
     download_timeout = Timeout(timeout=10,read=None)
     def __init__(
             self,session: SessionCookies,
-            callback: Function = None
+            callback: Function = None,
+            callback_args: Args = None
         ) -> None:
         if not isinstance(session,SessionCookies):
             raise Exception()
         self._session = session._prepare_to_session()
         self._callback = callback
-
+        self._callback_args = callback_args
         
         self._init_client()
     
@@ -113,6 +114,16 @@ class Terabox:
             raise Exception("callback debe ser una funcion")
         self._callback = value
 
+    @property
+    def callback_args(self):
+        return self._callback_args
+    
+    @callback_args.setter
+    def callback_args(self,value: Args):
+        if not isinstance(value,(tuple,list)):
+            value = (value)
+        self._callback_args = value 
+
     def _get_data(self,url: str): 
         if not is_valid_url(url):
             raise Exception("Url is Invalid")
@@ -136,7 +147,7 @@ class Terabox:
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
             raise Exception()
-        head_rq = await self.httpx_client.get(
+        head_rq = self.httpx_client.get(
             response_json["list"][0]["dlink"],follow_redirects=False
         )
         if not head_rq.has_redirect_location:
@@ -210,8 +221,8 @@ class Terabox:
                 with download_instance.stream("GET",dl_url,timeout=self.download_timeout) as resp:
                     for b in self._get_download(
                         respose=resp,
-                        callback=self.callback,
-                        callback_args=(),
+                        callback=self._callback,
+                        callback_args=self._callback_args,
                         total_size=r.size
                     ):
                         f.write(b)
@@ -250,7 +261,7 @@ class TeraboxAsync:
             callback_args: Args = None
         ) -> None:
         if not isinstance(session,SessionCookies):
-            raise Exception()
+            raise TypeError("session is required type SessionCookies")
         self._session = session._prepare_to_session()
         self._callback = callback
         self._callback_args = callback_args
