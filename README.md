@@ -27,7 +27,7 @@
 
 - **Usando el DevTools de tu navegador dirigirte Aplicación y seleccionar Cookies**
 
-- **Una vez seleccionada extraerlas en formato string siguiendo el [ejemplo]()**
+- **Una vez seleccionada extraerlas en formato string siguiendo el [ejemplo](https://github.com/RockstarDevCuba/terapy/blob/main/examples/example_cookies.py)**
 
 
 ---
