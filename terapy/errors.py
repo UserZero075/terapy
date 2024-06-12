@@ -13,3 +13,7 @@ class DontRedirect(Exception):
 class StatusResponseError(Exception):
     def __init__(self, code: str) -> None:
         super().__init__("Response Code Error: "+ str(code))
+
+class ApiResponseErrno(Exception):
+    def __init__(self, error: str) -> None:
+        super().__init__("API ERROR: " + error)
