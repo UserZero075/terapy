@@ -95,7 +95,7 @@ class Terabox:
     def _init_client(self):
         header = self._prepare_headers()
 
-        self.httpx_client = AsyncClient(
+        self.httpx_client = Client(
             cookies=self.session,
             headers=header,
             follow_redirects=True,

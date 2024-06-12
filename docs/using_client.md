@@ -12,7 +12,7 @@ __init__(session: SessionCookies) -> None
 Clase Constructora
 """
 
-get_link(url: str) -> str
+generate_link(url: str) -> str
 """
 Obtiene el link directo para realizar la descarga del archivo
 """
@@ -52,7 +52,7 @@ __init__(session: SessionCookies) -> None
 Clase Constructora para contexto asincronico
 """
 
-get_link(url: str) -> str
+generate_link(url: str) -> str
 """
 Obtiene el link directo para realizar la descarga del archivo
 """
