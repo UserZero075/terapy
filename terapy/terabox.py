@@ -26,7 +26,9 @@ from .ext import SessionCookies
 from .types import Function, Args
 from .errors import *
 
+from typing import Optional
 import inspect,functools,os
+
 
 class TeraboxData:
 
@@ -59,8 +61,8 @@ class Terabox:
     download_timeout = Timeout(timeout=10,read=None)
     def __init__(
             self,session: SessionCookies,
-            callback: Function = None,
-            callback_args: Args = None
+            callback: Optional[Function] = None,
+            callback_args: Optional[Args] = None
         ) -> None:
         if not isinstance(session,SessionCookies):
             raise Exception()
@@ -126,9 +128,13 @@ class Terabox:
 
     def _get_data(self,url: str): 
         if not is_valid_url(url):
-            raise Exception("Url is Invalid")
+            raise LinkInvalid()
         init_req_redict = self.httpx_client.get(url,params="")
+        if not (200 <= init_req_redict.status_code <= 399):
+            raise StatusResponseError(init_req_redict.status_code)
         init_req = self.httpx_client.get(init_req_redict.url,params="")
+        if not init_req.is_success:
+            raise StatusResponseError(init_req_redict.status_code)
         token = extract_info(init_req.text,TOKEN_PATTERN)
         dp_login = extract_info(init_req.text,DP_PATTERN)
         short_url = extract_url_query(
@@ -143,15 +149,15 @@ class Terabox:
         ))
 
         if not rq.is_success:
-            raise Exception()
+            raise StatusResponseError(init_req_redict.status_code)
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
-            raise Exception()
+            raise ApiResponseErrno(response_json['errno'])
         head_rq = self.httpx_client.get(
             response_json["list"][0]["dlink"],follow_redirects=False
         )
         if not head_rq.has_redirect_location:
-            Exception("Error in get direct link")
+            raise DontRedirect()
         return TeraboxData(
             filename=response_json["list"][0]['server_filename'],
             size=response_json["list"][0]['size'],
@@ -164,6 +170,7 @@ class Terabox:
         r = self._get_data(url)
         if not r.dlink: 
             raise CookiesError()
+        return r.dlink
     
 
     def get_thumbs(self,url: str):
@@ -193,8 +200,8 @@ class Terabox:
     def download(
             self, 
             url: str,
-            directory: str = PARENT_DIR,
-            file_name: str = None
+            directory: Optional[str] = PARENT_DIR,
+            file_name: Optional[str] = None
             ) -> str:
         if not url and not isinstance(url,str):
             raise TypeError("\"(url) is type str not \"" + type(url))
@@ -203,7 +210,7 @@ class Terabox:
             raise CookiesError()
         
         if directory != PARENT_DIR:
-            os.path.exists(directory)
+            if not os.path.exists(directory): os.mkdir(directory)
         if not file_name and not r.filename:
             file_name = create_name_hashed()
         elif not file_name and r.filename:
@@ -257,8 +264,8 @@ class TeraboxAsync:
     download_timeout = Timeout(timeout=10,read=None)
     def __init__(
             self,session: SessionCookies,
-            callback: Function = None,
-            callback_args: Args = None
+            callback: Optional[Function] = None,
+            callback_args: Optional[Args] = None
         ) -> None:
         if not isinstance(session,SessionCookies):
             raise TypeError("session is required type SessionCookies")
@@ -325,7 +332,7 @@ class TeraboxAsync:
 
     async def _get_data(self,url: str): 
         if not is_valid_url(url):
-            raise Exception("Url is Invalid")
+            raise LinkInvalid()
         init_req_redict = await self.httpx_client.get(url)
         if not (200 <= init_req_redict.status_code <= 399):
             raise StatusResponseError(init_req_redict.status_code)
@@ -349,12 +356,12 @@ class TeraboxAsync:
             raise StatusResponseError(init_req_redict.status_code)
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
-            raise Exception()
+            raise ApiResponseErrno(response_json['errno'])
         head_rq = await self.httpx_client.get(
             response_json["list"][0]["dlink"],follow_redirects=False
         )
         if not head_rq.has_redirect_location:
-            Exception("Error in get direct link")
+            raise DontRedirect()
         return TeraboxData(
             filename=response_json["list"][0]['server_filename'],
             size=response_json["list"][0]['size'],
@@ -367,9 +374,9 @@ class TeraboxAsync:
         r = await self._get_data(url)
         if not r.dlink: 
             raise CookiesError()
-    
+        return r.dlink
 
-    async def get_thumbs(self,url: str):
+    async def get_thumbs(self,url: str) -> str:
         if not url and not isinstance(url,str):
             raise TypeError("\"(url) is type str not \"" + type(url))
         r = await self._get_data(url)
@@ -377,7 +384,7 @@ class TeraboxAsync:
             raise CookiesError()
         return r.icon_url
     
-    async def get_size(self,url: str):
+    async def get_size(self,url: str) -> int:
         if not url and not isinstance(url,str):
             raise TypeError("\"(url) is type str not \"" + type(url))
         r = await self._get_data(url)
@@ -385,7 +392,7 @@ class TeraboxAsync:
             raise CookiesError()
         return r.size
     
-    async def get_name(self,url: str):
+    async def get_name(self,url: str) -> str:
         if not url and not isinstance(url,str):
             raise TypeError("\"(url) is type str not \"" + type(url))
         r = await self._get_data(url)
@@ -396,8 +403,8 @@ class TeraboxAsync:
     async def download(
             self, 
             url: str,
-            directory: str = PARENT_DIR,
-            file_name: str = None
+            directory: Optional[str] = PARENT_DIR,
+            file_name: Optional[str] = None
             ) -> str:
         if not url and not isinstance(url,str):
             raise TypeError("\"(url) is type str not \"" + type(url))
@@ -406,7 +413,7 @@ class TeraboxAsync:
             raise CookiesError()
         
         if directory != PARENT_DIR:
-            os.path.exists(directory)
+            if not os.path.exists(directory): os.mkdir(directory)
         if not file_name and not r.filename:
             file_name = create_name_hashed()
         elif not file_name and r.filename:
