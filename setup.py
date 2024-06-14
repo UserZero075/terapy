@@ -7,7 +7,7 @@ fld.close()
 
 setup(
     name="terapy",
-    version="0.1.3",
+    version="0.1.4",
     description="A library to download from terabox",
     long_description=long_description,
     long_description_content_type="text/markdown",
