@@ -22,7 +22,10 @@ from .const import (
     BASE_URL,
     PARENT_DIR
 )
-from .ext import SessionCookies
+from .ext import (
+    SessionCookies,
+    UseDefault
+)
 from .types import Function, Args
 from .errors import *
 
@@ -57,8 +60,8 @@ class TeraboxData:
 class Terabox:
     
     httpx_client: Client
-    client_timeout = 60
-    download_timeout = Timeout(timeout=10,read=None)
+    client_timeout = UseDefault.timeout()
+    download_timeout = UseDefault.timeout_dl()
     def __init__(
             self,session: SessionCookies,
             callback: Optional[Function] = None,
@@ -153,6 +156,8 @@ class Terabox:
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
             raise ApiResponseErrno(response_json['errno'])
+        elif "dlink" in response_json['list'][0].keys():
+            raise CookiesError()
         head_rq = self.httpx_client.get(
             response_json["list"][0]["dlink"],follow_redirects=False
         )
@@ -228,30 +233,29 @@ class Terabox:
                 with download_instance.stream("GET",dl_url,timeout=self.download_timeout) as resp:
                     for b in self._get_download(
                         respose=resp,
+                        file_data=r,
                         callback=self._callback,
                         callback_args=self._callback_args,
-                        total_size=r.size
                     ):
                         f.write(b)
             return path
 
 
-    def _get_download(self,respose: Response, **kwargs):
+    def _get_download(self,respose: Response,file_data: TeraboxData, **kwargs):
         callback_function = kwargs.get("callback")
         callback_args = kwargs.get("callback_args")
-        total_size = kwargs.get("total_size")
         current = 0
 
         for chunk in respose.stream:
             yield chunk
             current += len(chunk)
             if callback_function:
-                if not inspect.iscoroutinefunction(callback_function):
+                if inspect.iscoroutinefunction(callback_function):
                     ...
                 else:
                     f = functools.partial(
                         callback_function,
-                        *(current,total_size),
+                        *(current,file_data),
                         *callback_args
                     )
                     f()
@@ -260,8 +264,8 @@ class Terabox:
 
 class TeraboxAsync:
     httpx_client: AsyncClient
-    client_timeout = 60
-    download_timeout = Timeout(timeout=10,read=None)
+    client_timeout = UseDefault.timeout()
+    download_timeout = UseDefault.timeout_dl()
     def __init__(
             self,session: SessionCookies,
             callback: Optional[Function] = None,
@@ -357,6 +361,8 @@ class TeraboxAsync:
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
             raise ApiResponseErrno(response_json['errno'])
+        elif "dlink" in response_json['list'][0].keys():
+            raise CookiesError()
         head_rq = await self.httpx_client.get(
             response_json["list"][0]["dlink"],follow_redirects=False
         )

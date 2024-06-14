@@ -1,4 +1,4 @@
-from httpx import Cookies
+from httpx import Cookies,Timeout
 from typing import Dict
 import re
 
@@ -21,4 +21,14 @@ class SessionCookies:
             self._cookies.set(k,v)
         return 
 
+
+
+class UseDefault():
+
+    @staticmethod
+    def timeout_dl():
+        return Timeout(60,read=10)
     
+    @staticmethod
+    def timeout():
+        return Timeout(10)
