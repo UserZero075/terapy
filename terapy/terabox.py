@@ -129,46 +129,60 @@ class Terabox:
             value = (value)
         self._callback_args = value 
 
-    def _get_data(self,url: str): 
-        if not is_valid_url(url):
-            raise LinkInvalid()
-        init_req_redict = self.httpx_client.get(url,params="")
-        if not (200 <= init_req_redict.status_code <= 399):
-            raise StatusResponseError(init_req_redict.status_code)
-        init_req = self.httpx_client.get(init_req_redict.url,params="")
-        if not init_req.is_success:
-            raise StatusResponseError(init_req_redict.status_code)
-        token = extract_info(init_req.text,TOKEN_PATTERN)
-        dp_login = extract_info(init_req.text,DP_PATTERN)
-        short_url = extract_url_query(
-            "surl",
-            init_req_redict.url
-        )
+    def _get_data(self, url: str):
+        try:
+            if not is_valid_url(url):
+                raise LinkInvalid()
+            
+            init_req_redirect = self.httpx_client.get(url, params="")
+            if not 200 <= init_req_redirect.status_code < 400:
+                raise StatusResponseError(init_req_redirect.status_code)
+            
+            init_req = self.httpx_client.get(init_req_redirect.url, params="")
+            if not init_req.is_success:
+                raise StatusResponseError(init_req_redirect.status_code)
+            
+            token = extract_info(init_req.text, TOKEN_PATTERN)
+            dp_login = extract_info(init_req.text, DP_PATTERN)
+            short_url = extract_url_query("surl", init_req_redirect.url)
+            
+            rq = self.httpx_client.get(BASE_URL.format(token=token, log_id=dp_login, short_url=short_url))
+            
+            if not rq.is_success:
+                raise StatusResponseError(init_req_redirect.status_code)
+            
+            response_json = dict(rq.json())
+            if response_json.get("errno") or not response_json.get("list", None):
+                raise ApiResponseErrno(response_json['errno'])
+            elif "dlink" not in response_json['list'][0].keys():
+                raise CookiesError()
+            
+            head_rq = self.httpx_client.get(response_json["list"][0]["dlink"], follow_redirects=False)
+            if not head_rq.has_redirect_location:
+                raise DontRedirect()
+            
+            return TeraboxData(
+                filename=response_json["list"][0]['server_filename'],
+                size=response_json["list"][0]['size'],
+                dlink=response_json["list"][0]['dlink'],
+                icon_url=response_json["list"][0]['thumbs']['url3']
+            )
         
-        rq = self.httpx_client.get(BASE_URL.format(
-                token = token,
-                log_id = dp_login,
-                short_url = short_url
-        ))
+        except LinkInvalid:
+            # Manejo de la excepción LinkInvalid
+            # Código para manejar cuando la URL no es válida
+            pass
+        
+        except StatusResponseError as e:
+            # Manejo de la excepción StatusResponseError
+            # Código para manejar cuando hay un error en la respuesta HTTP
+            pass
+        
+        except Exception as e:
+            # Manejo de excepciones genéricas
+            # Código para manejar otras posibles excepciones
+            pass
 
-        if not rq.is_success:
-            raise StatusResponseError(init_req_redict.status_code)
-        response_json = dict(rq.json())
-        if response_json.get("errno") or not response_json.get("list",None):
-            raise ApiResponseErrno(response_json['errno'])
-        elif not "dlink" in response_json['list'][0].keys():
-            raise CookiesError()
-        head_rq = self.httpx_client.get(
-            response_json["list"][0]["dlink"],follow_redirects=False
-        )
-        if not head_rq.has_redirect_location:
-            raise DontRedirect()
-        return TeraboxData(
-            filename=response_json["list"][0]['server_filename'],
-            size=response_json["list"][0]['size'],
-            dlink=response_json["list"][0]['dlink'],
-            icon_url=response_json["list"][0]['thumbs']['url3'],
-        )
     def generate_link(self,url: str) -> str:
         if not url and not isinstance(url,str):
             raise LinkInvalid()
