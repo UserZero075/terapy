@@ -156,7 +156,7 @@ class Terabox:
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
             raise ApiResponseErrno(response_json['errno'])
-        elif "dlink" in response_json['list'][0].keys():
+        elif not "dlink" in response_json['list'][0].keys():
             raise CookiesError()
         head_rq = self.httpx_client.get(
             response_json["list"][0]["dlink"],follow_redirects=False
@@ -361,7 +361,7 @@ class TeraboxAsync:
         response_json = dict(rq.json())
         if response_json.get("errno") or not response_json.get("list",None):
             raise ApiResponseErrno(response_json['errno'])
-        elif "dlink" in response_json['list'][0].keys():
+        elif not "dlink" in response_json['list'][0].keys():
             raise CookiesError()
         head_rq = await self.httpx_client.get(
             response_json["list"][0]["dlink"],follow_redirects=False
