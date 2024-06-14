@@ -19,5 +19,5 @@ setup(
         'httpx>=0.27.0',
         'multidict>=6.0.5',
     ],
-    packages="terapy"
+    packages=["terapy"]
 )
