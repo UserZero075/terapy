@@ -243,7 +243,7 @@ class Terabox:
 
     def _get_download(self,respose: Response,file_data: TeraboxData, **kwargs):
         callback_function = kwargs.get("callback")
-        callback_args = kwargs.get("callback_args")
+        callback_args = kwargs.get("callback_args") if kwargs.get("callback_args") else ()
         current = 0
 
         for chunk in respose.stream:
@@ -447,7 +447,7 @@ class TeraboxAsync:
 
     async def _get_download(self,respose: Response, **kwargs):
         callback_function = kwargs.get("callback")
-        callback_args = kwargs.get("callback_args")
+        callback_args = kwargs.get("callback_args") if kwargs.get("callback_args") else ()
         total_size = kwargs.get("total_size")
         current = 0
 
